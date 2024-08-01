@@ -267,6 +267,13 @@ julia> mask
 ```
 """
 function doc(checkpoint::Checkpoint, integer_ids::AbstractArray, integer_mask::AbstractArray)
+    use_gpu = checkpoint.config.run_settings.use_gpu
+
+    if use_gpu 
+        integer_ids = integer_ids |> Flux.gpu
+        integer_mask = integer_mask|> Flux.gpu
+    end
+
     D = checkpoint.model.bert((token=integer_ids, attention_mask=NeuralAttentionlib.GenericSequenceMask(integer_mask))).hidden_state
     D = checkpoint.model.linear(D)
 
@@ -275,8 +282,19 @@ function doc(checkpoint::Checkpoint, integer_ids::AbstractArray, integer_mask::A
     @assert isequal(size(mask)[2:end], size(D)[2:end])
 
     D = D .* mask                                                                   # clear out embeddings of masked tokens
-    D = mapslices(v -> iszero(v) ? v : normalize(v), D, dims = 1)                   # normalize each embedding
-    D, mask
+
+    if !use_gpu
+        # doing this because normalize gives exact results
+        D = mapslices(v -> iszero(v) ? v : normalize(v), D, dims = 1)                 # normalize each embedding
+    else
+        # TODO: try to do some tests to see the gap between this and LinearAlgebra.normalize
+        # mapreduce doesn't give exact normalization
+        norms = map(sqrt, mapreduce(abs2, +, D, dims = 1))
+        norms[norms .== 0] .= 1                                                         # avoid division by 0
+        D = D ./ norms
+    end
+
+    Flux.cpu(D), Flux.cpu(mask)
 end
 
 """
