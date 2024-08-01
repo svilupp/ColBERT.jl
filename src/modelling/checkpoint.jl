@@ -291,6 +291,9 @@ function doc(checkpoint::Checkpoint, integer_ids::AbstractArray, integer_mask::A
         # mapreduce doesn't give exact normalization
         norms = map(sqrt, mapreduce(abs2, +, D, dims = 1))
         norms[norms .== 0] .= 1                                                         # avoid division by 0
+        @assert isequal(size(norms)[2:end], size(D)[2:end])
+        @assert size(norms)[1] == 1
+
         D = D ./ norms
     end
 
