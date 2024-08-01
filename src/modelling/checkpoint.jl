@@ -294,7 +294,7 @@ function doc(checkpoint::Checkpoint, integer_ids::AbstractArray, integer_mask::A
         D = D ./ norms
     end
 
-    Flux.cpu(D), Flux.cpu(mask)
+    D, mask
 end
 
 """
