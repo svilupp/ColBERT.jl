@@ -400,7 +400,7 @@ function docFromText(checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{
         # remove embeddings for masked tokens
         D = D[:, reshape(mask, prod(size(mask)))]
 
-        D, doclens
+        Flux.cpu(D), Flux.cpu(doclens)
     end
 end
 
