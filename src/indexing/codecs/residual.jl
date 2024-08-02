@@ -57,10 +57,7 @@ A vector of codes, where each code corresponds to the nearest centroid ID for th
 ```
 """
 function compress_into_codes(codec::ResidualCodec, embs::Matrix{Float64})
-    use_gpu = codec.config.run_settings.use_gpu
-    codes = Vector{Int}()
-
-    codes = codes |> Flux.gpu
+    codes = Vector{Int}() |> Flux.gpu
 
     bsize = Int(floor((1 << 29) / size(codec.centroids)[2]))
     offset = 1 
@@ -70,8 +67,8 @@ function compress_into_codes(codec::ResidualCodec, embs::Matrix{Float64})
         append!(codes, indices)
         offset += bsize
     end
-
     @assert length(codes) == size(embs)[2]
+
     codes
 end
 
