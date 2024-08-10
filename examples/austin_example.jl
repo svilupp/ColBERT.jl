@@ -70,3 +70,13 @@ print(searcher.config.resource_settings.collection.data[pids])
 query = "are rabbits easy to housebreak?"
 pids, scores = search(searcher, query, 9)
 print(searcher.config.resource_settings.collection.data[pids])
+
+# # Benchmark with PromptingTools
+using PromptingTools
+using PromptingTools.Experimental.RAGTools
+const PT = PromptingTools
+const RT = PromptingTools.Experimental.RAGTools
+
+index = build_index(questions)
+
+result = airag(index; question = "what are white spots on raspberries?", return_all = true)
