@@ -1,12 +1,15 @@
 """
-    BaseColBERT(; bert::Transformers.HuggingFace.HGFBertModel, linear::Transformers.Layers.Dense, tokenizer::Transformers.TextEncoders.AbstractTransformerTextEncoder)
+    BaseColBERT(;
+        bert::Transformers.HuggingFace.HGFBertModel, linear::Transformers.Layers.Dense,
+        tokenizer::Transformers.TextEncoders.AbstractTransformerTextEncoder)
 
 A struct representing the BERT model, linear layer, and the tokenizer used to compute embeddings for documents and queries.
 
 # Arguments
-- `bert`: The pre-trained BERT model used to generate the embeddings.
-- `linear`: The linear layer used to project the embeddings to a specific dimension.
-- `tokenizer`: The tokenizer to used by the BERT model.
+
+  - `bert`: The pre-trained BERT model used to generate the embeddings.
+  - `linear`: The linear layer used to project the embeddings to a specific dimension.
+  - `tokenizer`: The tokenizer to used by the BERT model.
 
 # Returns
 
@@ -17,7 +20,7 @@ A [`BaseColBERT`](@ref) object.
 The `config` in the below example is taken from the example in [`ColBERTConfig`](@ref).
 
 ```julia-repl
-julia> base_colbert = BaseColBERT(checkpoint, config); 
+julia> base_colbert = BaseColBERT(checkpoint, config);
 
 julia> base_colbert.bert
 HGFBertModel(
@@ -76,7 +79,6 @@ BertTextEncoder(
   ╰─ target[segment] := TextEncodeBase.trunc_and_pad(512, 1, tail, tail)(target.segment)
   ╰─ target[segment] := TextEncodeBase.nested2batch(target.segment)
   ╰─ target := (target.token, target.segment, target.attention_mask)
-
 ```
 """
 struct BaseColBERT
@@ -90,11 +92,13 @@ function BaseColBERT(checkpoint::String, config::ColBERTConfig)
     # we manually load the linear layer
     bert_config = Transformers.load_config(checkpoint)
     bert_state_dict = HuggingFace.load_state_dict(checkpoint)
-    bert_model = HuggingFace.load_model(:bert, checkpoint, :model, bert_state_dict; config = bert_config)
-    linear = HuggingFace._load_dense(bert_state_dict, "linear", bert_config.hidden_size, config.doc_settings.dim, bert_config.initializer_range, true)
+    bert_model = HuggingFace.load_model(
+        :bert, checkpoint, :model, bert_state_dict; config = bert_config)
+    linear = HuggingFace._load_dense(bert_state_dict, "linear", bert_config.hidden_size,
+        config.doc_settings.dim, bert_config.initializer_range, true)
     tokenizer = Transformers.load_tokenizer(checkpoint)
-    
-    bert_model = bert_model |> Flux.gpu 
+
+    bert_model = bert_model |> Flux.gpu
     linear = linear |> Flux.gpu
 
     BaseColBERT(bert_model, linear, tokenizer)
@@ -103,17 +107,19 @@ end
 """
     Checkpoint(model::BaseColBERT, doc_tokenizer::DocTokenizer, config::ColBERTConfig)
 
-A wrapper for [`BaseColBERT`](@ref), which includes a [`ColBERTConfig`](@ref) and tokenization-specific functions via the [`DocTokenizer`](@ref) and [`QueryTokenizer`] types. 
+A wrapper for [`BaseColBERT`](@ref), which includes a [`ColBERTConfig`](@ref) and tokenization-specific functions via the [`DocTokenizer`](@ref) and [`QueryTokenizer`] types.
 
 If the config's [`DocSettings`](@ref) are configured to mask punctuations, then the `skiplist` property of the created [`Checkpoint`](@ref) will be set to a list of token IDs of punctuations.
 
 # Arguments
-- `model`: The [`BaseColBERT`](@ref) to be wrapped.
-- `doc_tokenizer`: A [`DocTokenizer`](@ref) used for functions related to document tokenization. 
-- `query_tokenizer`: A [`QueryTokenizer`](@ref) used for functions related to query tokenization. 
-- `config`: The underlying [`ColBERTConfig`](@ref). 
+
+  - `model`: The [`BaseColBERT`](@ref) to be wrapped.
+  - `doc_tokenizer`: A [`DocTokenizer`](@ref) used for functions related to document tokenization.
+  - `query_tokenizer`: A [`QueryTokenizer`](@ref) used for functions related to query tokenization.
+  - `config`: The underlying [`ColBERTConfig`](@ref).
 
 # Returns
+
 The created [`Checkpoint`](@ref).
 
 # Examples
@@ -121,7 +127,8 @@ The created [`Checkpoint`](@ref).
 Continuing from the example for [`BaseColBERT`](@ref):
 
 ```julia-repl
-julia> checkPoint = Checkpoint(base_colbert, DocTokenizer(base_colbert.tokenizer, config), QueryTokenizer(base_colbert.tokenizer, config), config)
+julia> checkPoint = Checkpoint(base_colbert, DocTokenizer(base_colbert.tokenizer, config),
+           QueryTokenizer(base_colbert.tokenizer, config), config)
 
 julia> checkPoint.skiplist              # by default, all punctuations
 32-element Vector{Int64}:
@@ -154,7 +161,6 @@ julia> checkPoint.skiplist              # by default, all punctuations
  1065
  1066
  1067
-
 ```
 """
 struct Checkpoint
@@ -165,10 +171,12 @@ struct Checkpoint
     skiplist::Union{Missing, Vector{Int64}}
 end
 
-function Checkpoint(model::BaseColBERT, doc_tokenizer::DocTokenizer, query_tokenizer::QueryTokenizer, config::ColBERTConfig)
+function Checkpoint(model::BaseColBERT, doc_tokenizer::DocTokenizer,
+        query_tokenizer::QueryTokenizer, config::ColBERTConfig)
     if config.doc_settings.mask_punctuation
         punctuation_list = string.(collect("!\"#\$%&\'()*+,-./:;<=>?@[\\]^_`{|}~"))
-        skiplist = [TextEncodeBase.lookup(model.tokenizer.vocab, punct) for punct in punctuation_list]
+        skiplist = [TextEncodeBase.lookup(model.tokenizer.vocab, punct)
+                    for punct in punctuation_list]
     else
         skiplist = missing
     end
@@ -176,27 +184,29 @@ function Checkpoint(model::BaseColBERT, doc_tokenizer::DocTokenizer, query_token
 end
 
 """
-    mask_skiplist(tokenizer::Transformers.TextEncoders.AbstractTransformerTextEncoder, integer_ids::AbstractMatrix{Int32}, skiplist::Union{Missing, Vector{Int64}})
+    mask_skiplist(tokenizer::Transformers.TextEncoders.AbstractTransformerTextEncoder,
+        integer_ids::AbstractMatrix{Int32}, skiplist::Union{Missing, Vector{Int64}})
 
-Create a mask for the given `integer_ids`, based on the provided `skiplist`. 
+Create a mask for the given `integer_ids`, based on the provided `skiplist`.
 If the `skiplist` is not missing, then any token IDs in the list will be filtered out along with the padding token.
 Otherwise, all tokens are included in the mask.
 
 # Arguments
 
-- `tokenizer`: The underlying tokenizer. 
-- `integer_ids`: An `Array` of token IDs for the documents. 
-- `skiplist`: A list of token IDs to skip in the mask. 
+  - `tokenizer`: The underlying tokenizer.
+  - `integer_ids`: An `Array` of token IDs for the documents.
+  - `skiplist`: A list of token IDs to skip in the mask.
 
 # Returns
+
 An array of booleans indicating whether the corresponding token ID is included in the mask or not. The array has the same shape as `integer_ids`, i.e `(L, N)`, where `L` is the maximum length of any document in `integer_ids` and `N` is the number of documents.
 
 # Examples
 
-Continuing with the example for [`tensorize`](@ref) and the `skiplist` from the example in [`Checkpoint`](@ref). 
+Continuing with the example for [`tensorize`](@ref) and the `skiplist` from the example in [`Checkpoint`](@ref).
 
 ```julia-repl
-julia>  mask_skiplist(checkPoint.model.tokenizer, integer_ids, checkPoint.skiplist)
+julia> mask_skiplist(checkPoint.model.tokenizer, integer_ids, checkPoint.skiplist)
 14×4 BitMatrix:
  1  1  1  1
  1  1  1  1
@@ -212,10 +222,10 @@ julia>  mask_skiplist(checkPoint.model.tokenizer, integer_ids, checkPoint.skipli
  0  0  0  1
  0  0  0  1
  0  0  0  1
-
 ```
 """
-function mask_skiplist(tokenizer::Transformers.TextEncoders.AbstractTransformerTextEncoder, integer_ids::AbstractMatrix{Int32}, skiplist::Union{Missing, Vector{Int64}})
+function mask_skiplist(tokenizer::Transformers.TextEncoders.AbstractTransformerTextEncoder,
+        integer_ids::AbstractMatrix{Int32}, skiplist::Union{Missing, Vector{Int64}})
     filter = integer_ids .!= TextEncodeBase.lookup(tokenizer.vocab, tokenizer.padsym)
     for token_id in skiplist
         filter = filter .& (integer_ids .!= token_id)
@@ -224,22 +234,23 @@ function mask_skiplist(tokenizer::Transformers.TextEncoders.AbstractTransformerT
 end
 
 """
-    doc(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32}, integer_mask::AbstractMatrix{Bool})
+    doc(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32},
+        integer_mask::AbstractMatrix{Bool})
 
-Compute the hidden state of the BERT and linear layers of ColBERT for documents. 
+Compute the hidden state of the BERT and linear layers of ColBERT for documents.
 
 # Arguments
 
-- `checkpoint`: The [`Checkpoint`](@ref) containing the layers to compute the embeddings. 
-- `integer_ids`: An array of token IDs to be fed into the BERT model. 
-- `integer_mask`: An array of corresponding attention masks. Should have the same shape as `integer_ids`. 
+  - `checkpoint`: The [`Checkpoint`](@ref) containing the layers to compute the embeddings.
+  - `integer_ids`: An array of token IDs to be fed into the BERT model.
+  - `integer_mask`: An array of corresponding attention masks. Should have the same shape as `integer_ids`.
 
 # Returns
 
 A tuple `D, mask`, where:
 
-- `D` is an array containing the normalized embeddings for each token in each document. It has shape `(D, L, N)`, where `D` is the embedding dimension (`128` for the linear layer of ColBERT), and `(L, N)` is the shape of `integer_ids`, i.e `L` is the maximum length of any document and `N` is the total number of documents.
-- `mask` is an array containing attention masks for all documents, after masking out any tokens in the `skiplist` of `checkpoint`. It has shape `(1, L, N)`, where `(L, N)` is the same as described above.
+  - `D` is an array containing the normalized embeddings for each token in each document. It has shape `(D, L, N)`, where `D` is the embedding dimension (`128` for the linear layer of ColBERT), and `(L, N)` is the shape of `integer_ids`, i.e `L` is the maximum length of any document and `N` is the total number of documents.
+  - `mask` is an array containing attention masks for all documents, after masking out any tokens in the `skiplist` of `checkpoint`. It has shape `(1, L, N)`, where `(L, N)` is the same as described above.
 
 # Examples
 
@@ -261,22 +272,23 @@ julia> mask
 
 [:, :, 4] =
  1  1  1  1  1  1  1  0  1  1  1  1  1  1
-
 ```
 """
-function doc(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32}, integer_mask::AbstractMatrix{Bool})
+function doc(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32},
+        integer_mask::AbstractMatrix{Bool})
     use_gpu = checkpoint.config.run_settings.use_gpu
 
     integer_ids = integer_ids |> Flux.gpu
-    integer_mask = integer_mask|> Flux.gpu
+    integer_mask = integer_mask |> Flux.gpu
 
-    D = checkpoint.model.bert((token=integer_ids, attention_mask=NeuralAttentionlib.GenericSequenceMask(integer_mask))).hidden_state
+    D = checkpoint.model.bert((token = integer_ids,
+        attention_mask = NeuralAttentionlib.GenericSequenceMask(integer_mask))).hidden_state
     D = checkpoint.model.linear(D)
 
     mask = mask_skiplist(checkpoint.model.tokenizer, integer_ids, checkpoint.skiplist)
     mask = reshape(mask, (1, size(mask)...))                                        # equivalent of unsqueeze
     @assert isequal(size(mask)[2:end], size(D)[2:end]) "size(mask): $(size(mask)), size(D): $(size(D))"
-    @assert mask isa AbstractArray{Bool} "$(typeof(mask))" 
+    @assert mask isa AbstractArray{Bool} "$(typeof(mask))"
 
     D = D .* mask                                                                   # clear out embeddings of masked tokens
 
@@ -298,7 +310,8 @@ function doc(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32}, integer
 end
 
 """
-    docFromText(checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{Missing, Int})
+    docFromText(
+        checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{Missing, Int})
 
 Get ColBERT embeddings for `docs` using `checkpoint`.
 
@@ -374,14 +387,17 @@ julia> doclens
 
 ```
 """
-function docFromText(checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{Missing, Int})
+function docFromText(
+        checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{Missing, Int})
     if ismissing(bsize)
         # integer_ids, integer_mask = tensorize(checkpoint.doc_tokenizer, checkpoint.model.tokenizer, docs, bsize)
         # doc(checkpoint, integer_ids, integer_mask)
         error("Currently bsize cannot be missing!")
     else
-        text_batches, reverse_indices = tensorize(checkpoint.doc_tokenizer, checkpoint.model.tokenizer, docs, bsize)
-        batches = [doc(checkpoint, integer_ids, integer_mask) for (integer_ids, integer_mask) in text_batches]
+        text_batches, reverse_indices = tensorize(
+            checkpoint.doc_tokenizer, checkpoint.model.tokenizer, docs, bsize)
+        batches = [doc(checkpoint, integer_ids, integer_mask)
+                   for (integer_ids, integer_mask) in text_batches]
 
         # aggregate all embeddings
         D, mask = Vector{AbstractArray{Float32}}(), Vector{AbstractArray{Bool}}()
@@ -391,7 +407,8 @@ function docFromText(checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{
         end
 
         # concat embeddings and masks, and put them in the original order
-        D, mask = cat(D..., dims = 3)[:, :, reverse_indices], cat(mask..., dims = 3)[:, :, reverse_indices]
+        D, mask = cat(D..., dims = 3)[:, :, reverse_indices],
+        cat(mask..., dims = 3)[:, :, reverse_indices]
         mask = reshape(mask, size(mask)[2:end])
 
         # get doclens, i.e number of attended tokens for each passage
@@ -403,8 +420,8 @@ function docFromText(checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{
         # remove embeddings for masked tokens
         D = D[:, reshape(mask, prod(size(mask)))]
 
-        @assert ndims(D) == 2 "ndims(D): $(ndims(D))"
-        @assert size(D)[2] == sum(doclens) "size(D): $(size(D)), sum(doclens): $(sum(doclens))"
+        @assert ndims(D)==2 "ndims(D): $(ndims(D))"
+        @assert size(D)[2]==sum(doclens) "size(D): $(size(D)), sum(doclens): $(sum(doclens))"
         @assert D isa AbstractMatrix{Float32} "$(typeof(D))"
         @assert doclens isa AbstractVector{Int64} "$(typeof(doclens))"
 
@@ -413,15 +430,16 @@ function docFromText(checkpoint::Checkpoint, docs::Vector{String}, bsize::Union{
 end
 
 """
-    query(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32}, integer_mask::AbstractMatrix{Bool})
+    query(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32},
+        integer_mask::AbstractMatrix{Bool})
 
-Compute the hidden state of the BERT and linear layers of ColBERT for queries. 
+Compute the hidden state of the BERT and linear layers of ColBERT for queries.
 
 # Arguments
 
-- `checkpoint`: The [`Checkpoint`](@ref) containing the layers to compute the embeddings. 
-- `integer_ids`: An array of token IDs to be fed into the BERT model. 
-- `integer_mask`: An array of corresponding attention masks. Should have the same shape as `integer_ids`. 
+  - `checkpoint`: The [`Checkpoint`](@ref) containing the layers to compute the embeddings.
+  - `integer_ids`: An array of token IDs to be fed into the BERT model.
+  - `integer_mask`: An array of corresponding attention masks. Should have the same shape as `integer_ids`.
 
 # Returns
 
@@ -456,16 +474,17 @@ julia> query(checkPoint, integer_ids, integer_mask)
  -0.116265    -0.106331    -0.179832    -0.149728    …  -0.0197172   -0.022061    -0.018135
  -0.0443452   -0.192203    -0.0187912   -0.0247794      -0.0699095   -0.0684749   -0.0662904
   0.100019    -0.0618588    0.106134     0.0989047      -0.0556761   -0.0556784   -0.059571
-
 ```
 """
-function query(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32}, integer_mask::AbstractMatrix{Bool})
+function query(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32},
+        integer_mask::AbstractMatrix{Bool})
     use_gpu = checkpoint.config.run_settings.use_gpu
 
     integer_ids = integer_ids |> Flux.gpu
     integer_mask = integer_mask |> Flux.gpu
 
-    Q = checkpoint.model.bert((token=integer_ids, attention_mask=NeuralAttentionlib.GenericSequenceMask(integer_mask))).hidden_state
+    Q = checkpoint.model.bert((token = integer_ids,
+        attention_mask = NeuralAttentionlib.GenericSequenceMask(integer_mask))).hidden_state
     Q = checkpoint.model.linear(Q)
 
     # only skip the pad symbol, i.e an empty skiplist
@@ -490,15 +509,16 @@ function query(checkpoint::Checkpoint, integer_ids::AbstractMatrix{Int32}, integ
         Q = Q ./ norms
     end
 
-    @assert ndims(Q) == 3 "ndims(Q): $(ndims(Q))"
+    @assert ndims(Q)==3 "ndims(Q): $(ndims(Q))"
     @assert isequal(size(Q)[2:end], size(integer_ids)) "size(Q): $(size(Q)), size(integer_ids): $(size(integer_ids))"
-    @assert Q isa AbstractArray{Float32} "$(typeof(Q))" 
+    @assert Q isa AbstractArray{Float32} "$(typeof(Q))"
 
     Q
 end
 
 """
-    queryFromText(checkpoint::Checkpoint, queries::Vector{String}, bsize::Union{Missing, Int})
+    queryFromText(
+        checkpoint::Checkpoint, queries::Vector{String}, bsize::Union{Missing, Int})
 
 Get ColBERT embeddings for `queries` using `checkpoint`.
 
@@ -506,20 +526,20 @@ This function also applies ColBERT-style query pre-processing for each query in 
 
 # Arguments
 
-- `checkpoint`: A [`Checkpoint`](@ref) to be used to compute embeddings.  
-- `queries`: A list of queries to get the embeddings for. 
-- `bsize`: A batch size for processing queries in batches. 
+  - `checkpoint`: A [`Checkpoint`](@ref) to be used to compute embeddings.
+  - `queries`: A list of queries to get the embeddings for.
+  - `bsize`: A batch size for processing queries in batches.
 
 # Returns
 
-`embs`, where `embs` is an array of embeddings. The array `embs` has shape `(D, L, N)`, where `D` is the embedding dimension (`128` for ColBERT's linear layer), `L` is the maximum length of any query in the batch, and `N` is the total number of queries in `queries`. 
+`embs`, where `embs` is an array of embeddings. The array `embs` has shape `(D, L, N)`, where `D` is the embedding dimension (`128` for ColBERT's linear layer), `L` is the maximum length of any query in the batch, and `N` is the total number of queries in `queries`.
 
 # Examples
 
 Continuing from the example in [`Checkpoint`](@ref):
 
 ```julia-repl
-julia> queries = ["what are white spots on raspberries?"]; 
+julia> queries = ["what are white spots on raspberries?"];
 
 julia> queryFromText(checkPoint, queries, 128)
 128×32×1 Array{Float32, 3}:
@@ -546,27 +566,33 @@ julia> queryFromText(checkPoint, queries, 128)
  -0.116265    -0.106331    -0.179832    -0.149728    …  -0.0275017   -0.0197172   -0.022061    -0.018135
  -0.0443452   -0.192203    -0.0187912   -0.0247794      -0.0735711   -0.0699095   -0.0684749   -0.0662904
   0.100019    -0.0618588    0.106134     0.0989047      -0.0553564   -0.0556761   -0.0556784   -0.059571
-
 ```
 """
-function queryFromText(checkpoint::Checkpoint, queries::Vector{String}, bsize::Union{Missing, Int})
+function queryFromText(
+        checkpoint::Checkpoint, queries::Vector{String}, bsize::Union{Missing, Int})
     if ismissing(bsize)
         error("Currently bsize cannot be missing!")
     end
 
     # configure the tokenizer to truncate or pad to query_maxlen
-    tokenizer = checkpoint.model.tokenizer 
+    tokenizer = checkpoint.model.tokenizer
     process = tokenizer.process
-    truncpad_pipe = Pipeline{:token}(TextEncodeBase.trunc_or_pad(checkpoint.config.query_settings.query_maxlen, "[PAD]", :tail, :tail), :token)
+    truncpad_pipe = Pipeline{:token}(
+        TextEncodeBase.trunc_or_pad(
+            checkpoint.config.query_settings.query_maxlen, "[PAD]", :tail, :tail),
+        :token)
     process = process[1:4] |> truncpad_pipe |> process[6:end]
-    tokenizer = Transformers.TextEncoders.BertTextEncoder(tokenizer.tokenizer, tokenizer.vocab, process; startsym = tokenizer.startsym, endsym = tokenizer.endsym, padsym = tokenizer.padsym, trunc = tokenizer.trunc)
+    tokenizer = Transformers.TextEncoders.BertTextEncoder(
+        tokenizer.tokenizer, tokenizer.vocab, process; startsym = tokenizer.startsym,
+        endsym = tokenizer.endsym, padsym = tokenizer.padsym, trunc = tokenizer.trunc)
 
     # get ids and masks, embeddings and returning the concatenated tensors
     batches = tensorize(checkpoint.query_tokenizer, tokenizer, queries, bsize)
-    batches = [query(checkpoint, integer_ids, integer_mask) for (integer_ids, integer_mask) in batches]
-    Q = cat(batches..., dims=3)
+    batches = [query(checkpoint, integer_ids, integer_mask)
+               for (integer_ids, integer_mask) in batches]
+    Q = cat(batches..., dims = 3)
 
-    @assert ndims(Q) == 3 "ndims(Q): $(ndims(Q))"
+    @assert ndims(Q)==3 "ndims(Q): $(ndims(Q))"
     @assert Q isa AbstractArray{Float32} "$(typeof(Q))"
 
     Flux.cpu(Q)
