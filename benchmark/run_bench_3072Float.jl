@@ -5,18 +5,23 @@ using PromptingTools.Experimental.RAGTools
 const RT = PromptingTools.Experimental.RAGTools
 using JSON3, Dates, Statistics
 
-# Load all chunks quickly
+# Load all chunks quickly -- defaults to 1024 Bool
+AIHelpMe.update_pipeline!(:gold)
 index = AIHelpMe.load_index!([
     :julia, :juliadata, :tidier, :sciml, :plots, :makie, :genie])
 
-index.chunks
+# index.chunks
 
 # Load the evaluation set
 fn = "benchmark/dataframe_combined_filtered-qa-evals.json"
 eval_set = JSON3.read(fn)
 
 cfg = AIHelpMe.RAG_CONFIG.retriever;
+# Disable reranker for dumb OAI comparison
+cfg.reranker = RT.NoReranker()
 kwargs = AIHelpMe.RAG_KWARGS.retriever_kwargs;
+
+# Test retrieval
 res = RT.retrieve(cfg, index, "How do I install packages?"; kwargs...)
 res.context
 
@@ -60,10 +65,7 @@ function process_eval_item(eval_item)
     end
 end
 
-# Run the benchmark asynchronously
-@time results = asyncmap(process_eval_item, eval_set; ntasks = 30);
-
-let results = results
+function report_results(results)
     # Calculate and print summary statistics
     total_queries = length(results)
     successful_queries = count(r -> isnothing(r.error), results)
@@ -86,3 +88,70 @@ let results = results
     println(
         " - Mean reciprocal rank: ", round(mean_reciprocal_rank, digits = 2))
 end
+
+# Run the benchmark asynchronously
+@time results = asyncmap(process_eval_item, eval_set; ntasks = 30);
+report_results(results)
+
+# # All eval files
+
+fn = ["benchmark/dataframe_combined_filtered-qa-evals.json",
+    "benchmark/makie_combined_filtered-qa-evals.json",
+    "benchmark/tidier_combined_filtered-qa-evals.json",
+    "benchmark/sciml_combined_filtered-qa-evals.json",
+    "benchmark/plots_combined_filtered-qa-evals.json"
+]
+
+evals = vcat([JSON3.read(f) for f in fn]...)
+
+# Run the benchmark asynchronously
+@time results = asyncmap(process_eval_item, evals; ntasks = 30);
+report_results(results)
+
+# Hits @ top5
+# Benchmark Summary:
+#  - Total queries: 165
+#  - Successful queries: 165
+#  - Failed queries: 0
+#  - Success rate: 100.0%
+#  - Hits: 145
+#  - Accuracy: 87.88%
+#  - Average time: 0.71s
+#  - Mean reciprocal rank: 0.76
+
+# Update to top 10 items
+kwargs = (; kwargs..., top_n = 10);
+@time results = asyncmap(process_eval_item, evals; ntasks = 30);
+report_results(results)
+
+# Hits @ top10
+# Benchmark Summary:
+#  - Total queries: 165
+#  - Successful queries: 165
+#  - Failed queries: 0
+#  - Success rate: 100.0%
+#  - Hits: 151
+#  - Accuracy: 91.52%
+#  - Average time: 1.23s
+#  - Mean reciprocal rank: 0.76
+
+# # Performance with re-ranker
+
+# Reranker + top-5
+cfg.reranker = RT.CohereReranker();
+kwargs = AIHelpMe.RAG_KWARGS.retriever_kwargs;
+
+# Run the benchmark asynchronously
+@time results = asyncmap(process_eval_item, evals; ntasks = 30);
+report_results(results)
+
+# Hits @ top5 with reranker
+# Benchmark Summary:
+#  - Total queries: 165
+#  - Successful queries: 165
+#  - Failed queries: 0
+#  - Success rate: 100.0%
+#  - Hits: 151
+#  - Accuracy: 91.52%
+#  - Average time: 1.03s
+#  - Mean reciprocal rank: 0.86
