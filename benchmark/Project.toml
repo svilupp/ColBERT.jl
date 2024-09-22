@@ -1,0 +1,6 @@
+[deps]
+AIHelpMe = "01402e1f-dc83-4213-a98b-42887d758baa"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+PromptingTools = "670122d1-24a8-4d70-bfce-740807c42192"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
